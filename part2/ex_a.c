@@ -6,10 +6,12 @@
 
 void addValueToHistogram(int *histograma, double value);
 void writeToFileUnformatted(FILE *file_pointer, double value);
-void generateNewEvent(lista *eventos, int lambda);
+double generateNewEvent(lista *eventos, int lambda, int isBlocked);
 
 #define DEBUG 0
 #define dm 0.008
+#define TRUE 1
+#define FALSE 0
 
 //TODO: Entrada -> N canais
 //      Por lambda a 200
@@ -22,9 +24,10 @@ int main(int argc, char *argv[])
     int i = 0;
     int busy = 0, blocked = 0;
     int lambda, amostras, n_channels;
-    
-    double total_c = 0.0;
-    double c, d, u1, u2, big_d;
+    int BLOCKED_FLAG = FALSE;
+
+    double current_time = 0.0;
+    double c;
 
     FILE *fp;
     lista *eventos;
@@ -47,12 +50,17 @@ int main(int argc, char *argv[])
     fp = fopen("part2_a_log.txt", "w");
     
     //Adicionar o primeiro evento no tempo = 0
-    eventos = adicionar(NULL, CHEGADA, total_c);
+    eventos = adicionar(NULL, CHEGADA, current_time);
     busy++;
-    generateNewEvent(eventos, lambda);
+    generateNewEvent(eventos, lambda, BLOCKED_FLAG);
 
     while (i < amostras)
     {
+        if (DEBUG)
+        {
+            imprimir(eventos);
+            printf("Busy: %d\n", busy);
+        }
         //Remove o evento anterior e coloca o novo
         eventos = remover(eventos);
 
@@ -61,29 +69,29 @@ int main(int argc, char *argv[])
             case CHEGADA:
                 i++;
                 busy++;
-                generateNewEvent(eventos, lambda);
+                if (busy > n_channels)
+                {
+                    busy = n_channels;
+                    blocked++;
+                    BLOCKED_FLAG = TRUE;
+                }
+                c = generateNewEvent(eventos, lambda, BLOCKED_FLAG);
+                BLOCKED_FLAG=FALSE;
+
+                writeToFileUnformatted(fp, c);
                 break;
             case PARTIDA:
                 busy--;
                 break;
         }
-
-        if (busy > n_channels)
-        {
-            busy = n_channels;
-            blocked++;
-        }
-
-        //FIXME: o que fazer com isto? mudar de c para eventos->qlq coisa
-        writeToFileUnformatted(fp, c);
     }
 
-    if(DEBUG)
-        printf("media d: %f\n", big_d/(double)amostras);
+    current_time = eventos->tempo;
 
     //Calcular valor médio entre chegada de eventos
-    printf("Valor médio entre chegada de eventos: %.2f\n", total_c / ((double)amostras));
-
+    printf("Valor médio entre chegada de eventos: %.6f\n", current_time / ((double)amostras));
+    printf("Blocks: %d\n", blocked);
+    printf("Probabilidade de blocking: %.3f\n", (double)blocked / (double)amostras);
     fclose(fp);
     return 0;
 }
@@ -93,15 +101,18 @@ int main(int argc, char *argv[])
 void writeToFileUnformatted(FILE *file_pointer, double value)
 {
     char value_char[100];
-    sprintf(value_char, "%.2f", value);
+    sprintf(value_char, "%.6f", value);
     fputs(value_char, file_pointer);
     fputs(" ", file_pointer);
 }
 
-void generateNewEvent(lista *eventos, int lambda)
+/*Gera uma partida e uma chegada a partir da chegada recebida
+  Retorna o valor de c
+*/
+double generateNewEvent(lista *eventos, int lambda, int isBlocked)
 {
     double c, d, u1, u2;
-    double total_c;
+    double current_time;
 
     //Gerar numero aleatório entre 0 e 1
     u1 = (double)random() / RAND_MAX;
@@ -118,9 +129,12 @@ void generateNewEvent(lista *eventos, int lambda)
         printf("c = %f\n", c);
     }
         
-    total_c = eventos->tempo;
+    current_time = eventos->tempo;
 
     //Gerar partida deste evento e chegada do proximo
-    adicionar(eventos, PARTIDA, total_c + d);
-    adicionar(eventos, CHEGADA, total_c + c);
+    if (!isBlocked)
+        adicionar(eventos, PARTIDA, current_time + d);
+    adicionar(eventos, CHEGADA, current_time + c);
+
+    return c;
 }
