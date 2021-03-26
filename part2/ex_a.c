@@ -24,7 +24,7 @@ int main(int argc, char *argv[])
     int i = 0;
     int busy = 0, blocked = 0;
     int lambda, amostras, n_channels;
-    int BLOCKED_FLAG = FALSE;
+    int BLOCKED_FLAG = false;
 
     double current_time = 0.0;
     double c;
@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
     srand(time(NULL));
 
     fp = fopen("part2_a_log.txt", "w");
-    
+
     //Adicionar o primeiro evento no tempo = 0
     eventos = adicionar(NULL, CHEGADA, current_time);
     busy++;
@@ -64,25 +64,25 @@ int main(int argc, char *argv[])
         //Remove o evento anterior e coloca o novo
         eventos = remover(eventos);
 
-        switch(eventos->tipo)
+        switch (eventos->tipo)
         {
-            case CHEGADA:
-                i++;
-                busy++;
-                if (busy > n_channels)
-                {
-                    busy = n_channels;
-                    blocked++;
-                    BLOCKED_FLAG = TRUE;
-                }
-                c = generateNewEvent(eventos, lambda, BLOCKED_FLAG);
-                BLOCKED_FLAG=FALSE;
+        case CHEGADA:
+            i++;
+            busy++;
+            if (busy > n_channels)
+            {
+                busy = n_channels;
+                blocked++;
+                BLOCKED_FLAG = true;
+            }
+            c = generateNewEvent(eventos, lambda, BLOCKED_FLAG);
+            BLOCKED_FLAG = false;
 
-                writeToFileUnformatted(fp, c);
-                break;
-            case PARTIDA:
-                busy--;
-                break;
+            writeToFileUnformatted(fp, c);
+            break;
+        case PARTIDA:
+            busy--;
+            break;
         }
     }
 
@@ -128,7 +128,7 @@ double generateNewEvent(lista *eventos, int lambda, int isBlocked)
         printf("u = %f\t", u1);
         printf("c = %f\n", c);
     }
-        
+
     current_time = eventos->tempo;
 
     //Gerar partida deste evento e chegada do proximo
