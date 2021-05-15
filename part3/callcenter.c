@@ -46,6 +46,7 @@ int getCallType();
 #define false 0
 #define null NULL
 
+int LOST_FLAG = false;
 int queue_size = 0, avg_counter = 0;
 double *running_avg;
 
@@ -57,18 +58,20 @@ int main(int argc, char *argv[])
     int DELAY_FLAG = false;
                 
     double current_time = 0.0;          
-    double sum_delay = 0.0;
-    double delays[2000] = {0.0};
+    double sum_delay = 0.0, sum_error = 0.0, sum_relative = 0.0;
+    double *delays;
     double *prediction;
+    double *error, *relative_error;
+    
     double lambda;
 
-    FILE *fp, *fp2;
+    FILE *fp, *fp2, *fp3;
     lista *eventos, *waiting;
     lista *transfered;
 
     //AREA SPECIFIC
     int delay_areaSpec_counter = 0, areaSpec_processed_delays = 0;
-    int areaSpec_busy = 0, n_areaSpec_channels = 2;
+    int areaSpec_busy = 0, n_areaSpec_channels = 2; //TODO: poder mudar este parametro
 
     if (argc < 4) //<5 lambda [ponto 5.]
     {
@@ -87,11 +90,15 @@ int main(int argc, char *argv[])
 
     srand(time(null));
 
+    delays = (double*)calloc(amostras, sizeof(double));
     running_avg = (double*)calloc(amostras, sizeof(double));
     prediction = (double*)calloc(amostras, sizeof(double));
+    error = (double*)calloc(amostras, sizeof(double));
+    relative_error = (double*)calloc(amostras, sizeof(double));
 
-    fp = fopen("part2_a_log.txt", "w");
+    fp = fopen("error.txt", "w");
     fp2 = fopen("delays.txt", "w");
+    fp3 = fopen("predictions.txt", "w");
     
     waiting = adicionar(null, 0, 0);
 
@@ -103,7 +110,7 @@ int main(int argc, char *argv[])
 
     generateNewEvent(eventos, waiting, lambda, DELAY_FLAG, 0);
 
-    while (sample_counter < amostras)
+    while (eventos != null)
     {
         if (DEBUG)
         {
@@ -111,8 +118,13 @@ int main(int argc, char *argv[])
             printf("Busy: %d\n", busy);
         }
 
+        current_time = eventos->tempo;
+
         //Remove o evento anterior e coloca o novo
         eventos = remover(eventos);
+
+        if (eventos == null)
+            break;
 
         switch(eventos->tipo)
         {
@@ -123,6 +135,10 @@ int main(int argc, char *argv[])
             int duration;
             
             case CHEGADA:
+
+                if (sample_counter >= amostras)
+                    break;
+
                 amountInQueue = delay_counter - processed_delays;
 
                 sample_counter++;
@@ -134,16 +150,22 @@ int main(int argc, char *argv[])
 
                     if (amountInQueue < queue_size) 
                     {
-                        prediction[delay_counter] = running_avg[avg_counter-1] * amountInQueue;
-                        delay_counter++;   
+                        prediction[delay_counter] = running_avg[avg_counter-1];
+                        writeToFileUnformatted(fp3, prediction[delay_counter]);
+                        delay_counter++;
+                        DELAY_FLAG = true;  
                     }   
-                    else
+                    else 
+                    {
                         lost_counter++;
-                        
-                    DELAY_FLAG = true;
+                        LOST_FLAG = true;
+                    }
+                    
                 }
-                generateNewEvent(eventos, waiting, lambda, DELAY_FLAG, delay_counter - processed_delays);
-                DELAY_FLAG=false;
+                //printf("CHEGADA:tempo: %d , busy: %d-> delay_counter:%d, processed_delays:%d\n", (int)eventos->tempo, busy, delay_counter, processed_delays);
+                generateNewEvent(eventos, waiting, lambda, DELAY_FLAG, delay_counter - processed_delays - 1); // -1 because we are not counting this event when calculating the current lenght of queue
+                DELAY_FLAG = false;
+                LOST_FLAG = false;
 
                 //writeToFileUnformatted(fp, c); 
                 break;
@@ -166,14 +188,14 @@ int main(int argc, char *argv[])
 
                     //Calculate running average of call duration
                     running_avg[avg_counter] = running_avg[avg_counter-1] * (double)avg_counter / (double)(avg_counter+1)
-                                    + duration * 1 / (double)(avg_counter+1);
+                                    + delay_time * 1 / (double)(avg_counter+1);
                     avg_counter++;
                     
                     processed_delays++;
                     busy++;
 
-                    if (DEBUG)
-                        printf("GP:tempo: %lf, proc_delay: %d\n", queue_placed_time, processed_delays);
+                    if (0)
+                        printf("GP:tempo: %d, waiting: %d\n", (int)eventos->tempo, (int)queue_placed_time);
                 }
 
                 busy--;
@@ -198,14 +220,14 @@ int main(int argc, char *argv[])
 
                     //Calculate running average of call duration
                     running_avg[avg_counter] = running_avg[avg_counter-1] * (double)avg_counter / (double)(avg_counter+1)
-                                    + duration * 1 / (double)(avg_counter+1);
+                                    + delay_time * 1 / (double)(avg_counter+1);
                     avg_counter++;
 
                     processed_delays++;
                     busy++;
 
-                     if (DEBUG)
-                        printf("GP:tempo: %lf, proc_delay: %d\n", queue_placed_time, processed_delays);
+                     if (0)
+                        printf("AS_gp:tempo: %d, waiting: %d\n", (int)eventos->tempo, (int)queue_placed_time);
                     
                 }
                 busy--; //general purpose part is processed when  
@@ -215,40 +237,40 @@ int main(int argc, char *argv[])
 
         }
 
-        if (transfered != null)
-        {
-            switch (transfered->tipo)
-            {
-            case CHEGADA:
-                areaSpec_busy++;
+        // if (transfered != null)
+        // {
+        //     switch (transfered->tipo)
+        //     {
+        //     case CHEGADA:
+        //         areaSpec_busy++;
 
-                if (areaSpec_busy > n_areaSpec_channels)
-                {
-                    areaSpec_busy = n_channels;
-                    delay_areaSpec_counter++;  
-                }
-                else {
-                    transfered = adicionar(transfered, PARTIDA, eventos->tempo + getCallDuration(AS));
-                }
-                break;
+        //         if (areaSpec_busy > n_areaSpec_channels)
+        //         {
+        //             areaSpec_busy = n_channels;
+        //             delay_areaSpec_counter++;  
+        //         }
+        //         else {
+        //             transfered = adicionar(transfered, PARTIDA, eventos->tempo + getCallDuration(AS));
+        //         }
+        //         break;
             
-            case PARTIDA:
+        //     case PARTIDA:
                 
-                if (areaSpec_processed_delays < delay_areaSpec_counter)
-                {   
-                    //TODO: falta metricas dos delays, nao sei se é parecido com o caso GENERAL
-                    busy--; //general purpose part is processed 
-                    adicionar(eventos, PARTIDA, eventos->tempo + getCallDuration(AS));
-                    areaSpec_processed_delays++;
-                    areaSpec_busy++;
-                }
+        //         if (areaSpec_processed_delays < delay_areaSpec_counter)
+        //         {   
+        //             //TODO: falta metricas dos delays, nao sei se é parecido com o caso GENERAL
+        //             busy--; //general purpose part is processed 
+        //             adicionar(transfered, PARTIDA, eventos->tempo + getCallDuration(AS));
+        //             areaSpec_processed_delays++;
+        //             areaSpec_busy++;
+        //         }
     
-                areaSpec_busy--;
-                break;
-            }
+        //         areaSpec_busy--;
+        //         break;
+        //     }
 
-            transfered = remover(transfered);
-        }
+        //     transfered = remover(transfered);
+        // }
             
 
         
@@ -258,24 +280,47 @@ int main(int argc, char *argv[])
         }
     }
 
+   
     if (DEBUG)
-    {
-        printf("WAITING\n");
-        imprimir(waiting);
+        {
+            printf("WAITING\n");
+            imprimir(waiting);
+        }
+
+    for (int i=0; i<delay_counter; i++) {
+        error[i] = fabs(prediction[i] - delays[i]);
+        relative_error[i] = error[i] / delays[i];
+        sum_error += error[i];
+        sum_relative += relative_error[i];
+        writeToFileUnformatted(fp, error[i]);
     }
-    
-    current_time = eventos->tempo;
 
     //Calcular valor médio entre chegada de eventos
-    printf("Valor médio entre chegada de eventos: %.6f\n", current_time / ((double)amostras));
+    //printf("Valor médio entre chegada de eventos: %.6f\n", current_time / ((double)amostras));
+    
+    printf("sample count: %d\n", sample_counter);
+
+    printf("Probabilidade de atraso de chamada: %.3f\n", (double)delay_counter / (double)(amostras - lost_counter));
+    printf("Probabilidade chamada é perdida: %f\n", (double)lost_counter / (double)amostras);
     printf("Delays: %d\n", delay_counter);
-    printf("Probabilidade de atraso de pacote: %.3f\n", (double)delay_counter / (double)(amostras - lost_counter));
-    //Calcular media de atrasos dos pacotes
-    printf("Media de atraso de pacote: %.6f\n", sum_delay / (double)amostras);
-
-
     printf("Blocks: %d\n", lost_counter);
+
+    printf("sum_relative: %f\n", sum_relative);
+    
+    //Calcular media de atrasos dos pacotes
+    printf("Média de atraso de chamada: %.3f seg\n", sum_delay / (double)delay_counter);
+    printf("Média de erro absoluto de previsao de tempo de espera: %f\n", sum_error/(double)delay_counter);
+    printf("Média de erro relativo de previsao de tempo de espera: %f\n", sum_error/sum_delay);
+
+    // for (int i = 0; i<avg_counter; i++)
+    //     printf("Running avg:%d --> %f\n", i, running_avg[i]);
+
+    // for (int i = 0; i<delay_counter; i++)
+    //     printf("Prediction avg:%d --> %f\n", i, prediction[i]);
+
     fclose(fp);
+    fclose(fp2);
+    fclose(fp3);
     return 0;
 }
 
@@ -286,7 +331,7 @@ void writeToFileUnformatted(FILE *file_pointer, double value)
     char value_char[100];
     sprintf(value_char, "%.6f", value);
     fputs(value_char, file_pointer);
-    fputs(" ", file_pointer);
+    fputs("\n", file_pointer);
 }
 
 /*Gera uma partida e uma chegada a partir da chegada recebida
@@ -312,18 +357,16 @@ double generateNewEvent(lista *eventos, lista *waiting, double lambda, int isDel
     //Verifica o evento é delayed 
     if (isDelayed)
     {   //adiciona à waiting queue 
-        if (amountInQueue < queue_size)               
+        if (amountInQueue < queue_size)  {    
             adicionar(waiting, 0, current_time);
+        }
     }
-    else //Gerar partida deste evento
+    else if (LOST_FLAG == false) //Gerar partida deste evento
     {    
         adicionar(eventos, type, current_time + d);
-        //Calculate running average of call duration
-        running_avg[avg_counter] = running_avg[avg_counter-1] * (double)avg_counter / (double)(avg_counter+1)
-                                    + d * 1 / (double)(avg_counter+1);
-        avg_counter++;
     }   
     //Gerar chegada do proximo evento
+
     adicionar(eventos, CHEGADA, current_time + c);
 
     return c;
@@ -350,14 +393,14 @@ double getCallDuration(int type)
     if (type == GP) 
     {
         while (duration < 60 || duration > 300) {
-             u = (double)random() / RAND_MAX;
+             u = (double)random() / (double)RAND_MAX;
             duration = -120 * log(u);
         }
     }
     else if (type == AS)
     {
          while (duration < 60) {
-            u = (double)random() / RAND_MAX;
+            u = (double)random() / (double)RAND_MAX;
             duration = -150.0 * log(u);
          }
     }
@@ -365,8 +408,8 @@ double getCallDuration(int type)
     {
         while (duration < 30 || duration > 120)
         {
-            u1 = (double)random() / RAND_MAX;
-            u2 = (double)random() / RAND_MAX;
+            u1 = (double)random() / (double)RAND_MAX;
+            u2 = (double)random() / (double)RAND_MAX;
             theta = 2.0 * M_PI * u1;
             R = sqrt(-2.0 * log(u2));
 

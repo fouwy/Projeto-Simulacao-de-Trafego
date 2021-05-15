@@ -58,13 +58,19 @@ lista *adicionar(lista *apontador, int n_tipo, double n_tempo)
 // Fun��o que imprime no ecra todos os elementos da lista
 void imprimir(lista *apontador)
 {
+	FILE *fp;
+	fp = fopen("waiting.txt", "w");
 	if (apontador == NULL)
 		printf("Lista vazia!\n");
 	else
 	{
 		while (apontador != NULL)
 		{
-			printf("Tipo=%d\tTempo=%lf\n", apontador->tipo, apontador->tempo);
+			//printf("Tipo=%d\tTempo=%lf\n", apontador->tipo, apontador->tempo);
+			char value_char[100];
+    		sprintf(value_char, "%.6f", apontador->tempo);
+    		fputs(value_char, fp);
+    		fputs("\n", fp);
 			apontador = (lista *)apontador->proximo;
 		}
 	}
