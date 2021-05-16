@@ -237,40 +237,40 @@ int main(int argc, char *argv[])
 
         }
 
-        // if (transfered != null)
-        // {
-        //     switch (transfered->tipo)
-        //     {
-        //     case CHEGADA:
-        //         areaSpec_busy++;
+        if (transfered != null)
+        {
+            switch (transfered->tipo)
+            {
+            case CHEGADA:
+                areaSpec_busy++;
 
-        //         if (areaSpec_busy > n_areaSpec_channels)
-        //         {
-        //             areaSpec_busy = n_channels;
-        //             delay_areaSpec_counter++;  
-        //         }
-        //         else {
-        //             transfered = adicionar(transfered, PARTIDA, eventos->tempo + getCallDuration(AS));
-        //         }
-        //         break;
+                if (areaSpec_busy > n_areaSpec_channels)
+                {
+                    areaSpec_busy = n_channels;
+                    delay_areaSpec_counter++;  
+                }
+                else {
+                    transfered = adicionar(transfered, PARTIDA, eventos->tempo + getCallDuration(AS));
+                }
+                break;
             
-        //     case PARTIDA:
+            case PARTIDA:
                 
-        //         if (areaSpec_processed_delays < delay_areaSpec_counter)
-        //         {   
-        //             //TODO: falta metricas dos delays, nao sei se é parecido com o caso GENERAL
-        //             busy--; //general purpose part is processed 
-        //             adicionar(transfered, PARTIDA, eventos->tempo + getCallDuration(AS));
-        //             areaSpec_processed_delays++;
-        //             areaSpec_busy++;
-        //         }
+                if (areaSpec_processed_delays < delay_areaSpec_counter)
+                {   
+                    //TODO: falta metricas dos delays, nao sei se é parecido com o caso GENERAL
+                    busy--; //general purpose part is processed 
+                    adicionar(transfered, PARTIDA, eventos->tempo + getCallDuration(AS));
+                    areaSpec_processed_delays++;
+                    areaSpec_busy++;
+                }
     
-        //         areaSpec_busy--;
-        //         break;
-        //     }
+                areaSpec_busy--;
+                break;
+            }
 
-        //     transfered = remover(transfered);
-        // }
+            transfered = remover(transfered);
+        }
             
 
         
