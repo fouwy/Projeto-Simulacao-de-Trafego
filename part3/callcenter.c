@@ -47,7 +47,6 @@ int getCallType();
 #define null NULL
 
 int LOST_FLAG = false;
-int TYPE_FLAG = false;
 int GP_AS_counter = 0;
 int queue_size = 0, avg_counter = 0;
 double *running_avg;
@@ -56,13 +55,14 @@ double *GP_AS_time;
 int main(int argc, char *argv[])
 {
     int sample_counter = 0;
-    int busy = 0, delay_counter = 0, lost_counter = 0, processed_delays = 0;
+    int busy = 0, delay_counter = 0, lost_counter = 0, 
+        processed_delays = 0, GP_delay_counter = 0;
     int amostras, n_channels;
     int DELAY_FLAG = false;
 
     double current_time = 0.0;          
     double sum_delay = 0.0, sum_error = 0.0, sum_relative = 0.0;
-    double *delays;
+    double *delays, *GP_delay;
     double *prediction;
     double *error, *relative_error;
     
@@ -76,7 +76,7 @@ int main(int argc, char *argv[])
     int delay_areaSpec_counter = 0, areaSpec_processed_delays = 0;
     int areaSpec_busy = 0, n_areaSpec_channels;
     int transfered_counter = 0;
-    double sum_GP_AS_time = 0.0;
+    double sum_GP_AS_time = 0.0, sum_total_delay = 0.0;
 
     if (argc < 5) //<5 lambda [ponto 5.]
     {
@@ -102,6 +102,7 @@ int main(int argc, char *argv[])
     error = (double*)calloc(amostras, sizeof(double));
     relative_error = (double*)calloc(amostras, sizeof(double));
     GP_AS_time = (double*)calloc(amostras, sizeof(double));
+    GP_delay = (double*)calloc(amostras, sizeof(double));
 
     fp = fopen("error.txt", "w");
     fp2 = fopen("delays.txt", "w");
@@ -181,16 +182,9 @@ int main(int argc, char *argv[])
                     break;
                 case GP:
                     if (processed_delays < delay_counter) 
-                    {
-                    
+                    { 
                         queue_placed_time = getTime(waiting, processed_delays); //time returned from waiting list where: position = processed_delays
                         delay_time = eventos->tempo - queue_placed_time;        //diference from current-time and placement on waiting queue time
-                        if (TYPE_FLAG == GP_AS)
-                        {
-                            TYPE_FLAG = false;
-                            GP_AS_time[GP_AS_counter] = delay_time;
-                            GP_AS_counter++;
-                        }
                         
                         delays[processed_delays] = delay_time;  //stores delays
                         sum_delay += delays[processed_delays];  
@@ -204,9 +198,14 @@ int main(int argc, char *argv[])
 
                         if (call_type == GP_AS)
                         {
-                            GP_AS_time[GP_AS_counter] = delay_time + duration;
+                            GP_AS_time[GP_AS_counter] = delay_time; //+ duration;
                             GP_AS_counter++;
-                        }   
+                        }
+                        else 
+                        {
+                            GP_delay[GP_delay_counter] = delay_time;
+                            GP_delay_counter++;
+                        }
 
                         //Calculate running average of call duration
                         running_avg[avg_counter] = running_avg[avg_counter-1] * (double)avg_counter / (double)(avg_counter+1)
@@ -241,9 +240,14 @@ int main(int argc, char *argv[])
 
                         if (call_type == GP_AS)
                         {
-                            GP_AS_time[GP_AS_counter] = delay_time + duration;
+                            GP_AS_time[GP_AS_counter] = delay_time;// + duration;
                             GP_AS_counter++;
-                        }   
+                        } 
+                        else 
+                        {
+                            GP_delay[GP_delay_counter] = delay_time;
+                            GP_delay_counter++;
+                        }
 
                         //Calculate running average of call duration
                         running_avg[avg_counter] = running_avg[avg_counter-1] * (double)avg_counter / (double)(avg_counter+1)
@@ -273,26 +277,22 @@ int main(int argc, char *argv[])
 
             case CHEGADA:
                 areaSpec_busy++;
-
                 if (areaSpec_busy > n_areaSpec_channels)
                 {   
-                    
-                    areaSpec_busy = n_channels;
+                    areaSpec_busy = n_areaSpec_channels;
                     delay_areaSpec_counter++;
                     adicionar(waitingAS, 0, eventos->tempo);
                 }
                 else 
-                {
+                {   
                     transfered_counter++;
                     transfered = adicionar(transfered, PARTIDA, eventos->tempo + getCallDuration(AS));
                 }
                 break;
             
             case PARTIDA:
-                
                 if (areaSpec_processed_delays < delay_areaSpec_counter)
                 {   
-                    
                     queue_placed_time = getTime(waitingAS, areaSpec_processed_delays); 
                     delay_time = transfered->tempo - queue_placed_time;
                     GP_AS_time[transfered_counter] += delay_time;
@@ -311,26 +311,29 @@ int main(int argc, char *argv[])
 
             transfered = remover(transfered);
         }
-            
-
         
         if (DEBUG)
         {
             printf("proccessed: %d \tdelay_counter: %d\n", processed_delays, delay_counter);
         }
     }
-
    
-    if (DEBUG)
+    if (0)
         {
             printf("WAITING\n");
-            imprimir(waiting);
+            imprimir(waitingAS);
         }
 
     for (int i=0; i<transfered_counter; i++) {
         sum_GP_AS_time += GP_AS_time[i];
         writeToFileUnformatted(fp4, GP_AS_time[i]);
     }
+
+    for(int i= 0; i<GP_delay_counter; i++) {
+        sum_total_delay += GP_delay[i];
+    }
+
+    sum_total_delay += sum_GP_AS_time;
 
     for (int i=0; i<delay_counter; i++) {
         error[i] = fabs(prediction[i] - delays[i]);
@@ -359,6 +362,9 @@ int main(int argc, char *argv[])
     printf("Média de tempo entre a chegada de chamada ao GP e o atendimento no AS: %.2f seg\n", sum_GP_AS_time/(double)transfered_counter);
     printf("Média de erro absoluto de previsao de tempo de espera: %.2f seg\n", sum_error/(double)delay_counter);
     printf("Média de erro relativo de previsao de tempo de espera: %.2f %%\n", sum_error/sum_delay *100.0);
+    printf("Média do atraso total das chamadas: %.2f seg\n", sum_total_delay/(double)(transfered_counter+GP_delay_counter));
+    printf("transfered: %d\n", transfered_counter);
+    printf("GP_delay_counter: %d\n", GP_delay_counter);
 
     // for (int i = 0; i<avg_counter; i++)
     //     printf("Running avg:%d --> %f\n", i, running_avg[i]);
@@ -414,8 +420,8 @@ double generateNewEvent(lista *eventos, lista *waiting, double lambda, int isDel
     {    
         if (type == GP_AS) 
         {
-            GP_AS_time[GP_AS_counter] = d;
-            GP_AS_counter++;
+            // GP_AS_time[GP_AS_counter] = d;
+            // GP_AS_counter++;
         }
 
         adicionar(eventos, type, current_time + d);
