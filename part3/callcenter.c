@@ -74,21 +74,22 @@ int main(int argc, char *argv[])
 
     //AREA SPECIFIC
     int delay_areaSpec_counter = 0, areaSpec_processed_delays = 0;
-    int areaSpec_busy = 0, n_areaSpec_channels = 2; //TODO: poder mudar este parametro
+    int areaSpec_busy = 0, n_areaSpec_channels;
     int transfered_counter = 0;
     double sum_GP_AS_time = 0.0;
 
-    if (argc < 4) //<5 lambda [ponto 5.]
+    if (argc < 5) //<5 lambda [ponto 5.]
     {
-        printf("Usage: [progname] [N canais] [numero de amostras] [tamanho da fila]\n");
+        printf("Usage: [progname] [N canais GP] [N canais AS] [numero de amostras] [tamanho da fila]\n");
         return 0;
     }
 
     //lambda = atoi(argv[1]);
     lambda = 0.02222;
     n_channels = atoi(argv[1]);
-    amostras = atoi(argv[2]);
-    queue_size = atoi(argv[3]);
+    n_areaSpec_channels = atoi(argv[2]);
+    amostras = atoi(argv[3]);
+    queue_size = atoi(argv[4]);
 
     if (DEBUG)
         printf("Lambda = %f\nAmostras = %d\nN Canais = %d\n", lambda, amostras, n_channels);
@@ -291,7 +292,6 @@ int main(int argc, char *argv[])
                 
                 if (areaSpec_processed_delays < delay_areaSpec_counter)
                 {   
-                    //TODO: falta metricas dos delays, nao sei se é parecido com o caso GENERAL
                     
                     queue_placed_time = getTime(waitingAS, areaSpec_processed_delays); 
                     delay_time = transfered->tempo - queue_placed_time;
@@ -344,21 +344,21 @@ int main(int argc, char *argv[])
     //printf("Valor médio entre chegada de eventos: %.6f\n", current_time / ((double)amostras));
     
     printf("sample count: %d\n", sample_counter);
+    printf("Operadores GP: %d, Operadores AS: %d, Tamanho da fila GP: %d\n", n_channels, n_areaSpec_channels, queue_size);
 
-    printf("Probabilidade de atraso de chamada: %.3f\n", (double)delay_counter / (double)(amostras - lost_counter));
-    printf("Probabilidade chamada é perdida: %f\n", (double)lost_counter / (double)amostras);
-    printf("Delays: %d\n", delay_counter);
-    printf("Blocks: %d\n", lost_counter);
+    printf("Probabilidade de atraso de chamada: %.2f %%\n", (double)delay_counter / (double)(amostras - lost_counter) * 100.0);
+    printf("Probabilidade chamada é perdida: %.2f %%\n", (double)lost_counter / (double)amostras * 100.0);
 
-    printf("sum_relative: %f\n", sum_relative);
+    // printf("Delays: %d\n", delay_counter);
+    // printf("Blocks: %d\n", lost_counter);
+    // printf("sum_relative: %f\n", sum_relative);
     
     //Calcular media de atrasos dos pacotes
-    printf("Média de atraso de chamada: %.3f seg\n", sum_delay / (double)delay_counter);
-    printf("Média de atraso de chamada(com delays de zero incl): %.3f seg\n", sum_delay / (double)(amostras - lost_counter));
-    printf("Média de erro absoluto de previsao de tempo de espera: %f\n", sum_error/(double)delay_counter);
-    printf("Média de erro relativo de previsao de tempo de espera: %f\n", sum_error/sum_delay);
-
-    printf("Média de tempo entre a chegada de chamada ao GP e o atendimento no AS: %.3f seg\n", sum_GP_AS_time/(double)transfered_counter);
+    printf("Média de atraso de chamada: %.2f seg\n", sum_delay / (double)delay_counter);
+    // printf("Média de atraso de chamada(com delays de zero incl): %.3f seg\n", sum_delay / (double)(amostras - lost_counter));
+    printf("Média de tempo entre a chegada de chamada ao GP e o atendimento no AS: %.2f seg\n", sum_GP_AS_time/(double)transfered_counter);
+    printf("Média de erro absoluto de previsao de tempo de espera: %.2f seg\n", sum_error/(double)delay_counter);
+    printf("Média de erro relativo de previsao de tempo de espera: %.2f %%\n", sum_error/sum_delay *100.0);
 
     // for (int i = 0; i<avg_counter; i++)
     //     printf("Running avg:%d --> %f\n", i, running_avg[i]);
